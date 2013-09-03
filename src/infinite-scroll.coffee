@@ -12,7 +12,7 @@ mod.directive 'infiniteScroll', ['$rootScope', '$window', '$timeout', ($rootScop
     scrollDistance = 0
     if attrs.infiniteScrollDistance?
       scope.$watch attrs.infiniteScrollDistance, (value) ->
-        scrollDistance = parseInt(value, 10)
+        scrollDistance = parseFloat(value)
 
     # infinite-scroll-disabled specifies a boolean that will keep the
     # infnite scroll function from being called; this is useful for
@@ -35,10 +35,14 @@ mod.directive 'infiniteScroll', ['$rootScope', '$window', '$timeout', ($rootScop
     # with a boolean that is set to true when the function is
     # called in order to throttle the function call.
     handler = ->
-      windowBottom = $window.height() + $window.scrollTop()
-      elementBottom = elem.offset().top + elem.height()
-      remaining = elementBottom - windowBottom
-      shouldScroll = remaining <= $window.height() * scrollDistance
+      windowHeight = $window[0].document.documentElement.clientHeight
+      windowScrollTop = $window[0].pageYOffset
+      windowBottom = windowHeight + windowScrollTop
+      elemHeight = parseFloat(elem[0].ownerDocument.defaultView.getComputedStyle(elem[0], null)['height'])
+      elemTop = elem[0].getBoundingClientRect().top + windowScrollTop - elem[0].ownerDocument.documentElement.clientTop
+      elemBottom = elemTop + elemHeight
+      remaining = elemBottom - windowBottom
+      shouldScroll = remaining <= windowHeight * scrollDistance
 
       if shouldScroll && scrollEnabled
         if $rootScope.$$phase
@@ -48,15 +52,18 @@ mod.directive 'infiniteScroll', ['$rootScope', '$window', '$timeout', ($rootScop
       else if shouldScroll
         checkWhenEnabled = true
 
-    $window.on 'scroll', handler
-    scope.$on '$destroy', ->
-      $window.off 'scroll', handler
-
-    $timeout (->
-      if attrs.infiniteScrollImmediateCheck
-        if scope.$eval(attrs.infiniteScrollImmediateCheck)
-          handler()
-      else
+    scrollWatchTimer = null
+    windowScrollPosition = 0
+    watchScrollPosition = ->
+      if windowScrollPosition isnt $window[0].pageYOffset
         handler()
-    ), 0
+      windowScrollPosition = $window[0].pageYOffset
+      if typeof scrollWatchTimer is 'object'
+        $timeout.cancel(scrollWatchTimer)
+      scrollWatchTimer = $timeout (->
+        watchScrollPosition()
+      ), 250
+    watchScrollPosition()
+    scope.$on '$destroy', ->
+      $timeout.cancel(scrollWatchTimer)
 ]
